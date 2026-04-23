@@ -222,6 +222,31 @@ def grid_distribution_stats(mask, rows=6, cols=6):
     return cover, mean_cover, std_cover, cv_cover
 
 
+def pairwise_similarity_score(values):
+    clean_values = [float(v) for v in values if not np.isnan(v)]
+    n = len(clean_values)
+
+    if n <= 1:
+        return np.nan
+
+    diffs = []
+    for i in range(n):
+        for j in range(i + 1, n):
+            diffs.append(abs(clean_values[i] - clean_values[j]))
+
+    mean_pairwise_diff = float(np.mean(diffs)) if diffs else 0.0
+
+    # For n samples bounded to [0, 1], this is the largest possible mean
+    # pairwise difference and lets the score reach 0 at maximum separation.
+    max_mean_pairwise_diff = (n // 2) * (n - (n // 2)) / (n * (n - 1) / 2)
+
+    if max_mean_pairwise_diff <= 0:
+        return np.nan
+
+    similarity = 100.0 * (1.0 - (mean_pairwise_diff / max_mean_pairwise_diff))
+    return max(0.0, min(100.0, similarity))
+
+
 def compute_image_metrics(image_path: Path, threshold_value: int, brighter_is_particle: bool):
     original_img = load_image(str(image_path))
     img, cropped_top_px = crop_top_strip(original_img)
@@ -250,9 +275,11 @@ def compute_image_metrics(image_path: Path, threshold_value: int, brighter_is_pa
 
     particle_pixels = int(np.count_nonzero(particle_mask))
     white_pixels = total_px - particle_pixels
+    black_pixels = white_pixels
 
     particle_fraction = particle_pixels / total_px
     white_fraction = white_pixels / total_px
+    black_fraction = black_pixels / total_px
 
     if selected.empty:
         avg_area_px = np.nan
@@ -300,8 +327,10 @@ def compute_image_metrics(image_path: Path, threshold_value: int, brighter_is_pa
         "cropped_top_px": cropped_top_px,
         "particle_pixels": particle_pixels,
         "white_pixels": white_pixels,
+        "black_pixels": black_pixels,
         "particle_area_fraction": round(particle_fraction, 6),
         "white_area_fraction": round(white_fraction, 6),
+        "black_area_fraction": round(black_fraction, 6),
         "detected_components": int(len(components)),
         "selected_particle_count": particle_count_used,
         "avg_particle_area_px": round(avg_area_px, 3) if not np.isnan(avg_area_px) else np.nan,
@@ -349,6 +378,23 @@ def analyze_group(group_name, file_names, threshold_value, brighter_is_particle)
             r["summary"]["selected_particle_count"] = 0
 
     df = pd.DataFrame([r["summary"] for r in results])
+    black_similarity_score = pairwise_similarity_score(df["black_area_fraction"].to_list())
+    black_pixel_detail = {
+        "group": group_name,
+        **{
+            f"{row['image_name']}_black_pixels": int(row["black_pixels"])
+            for _, row in df.iterrows()
+        },
+        **{
+            f"{row['image_name']}_black_fraction": round(float(row["black_area_fraction"]), 6)
+            for _, row in df.iterrows()
+        },
+        "mean_black_pixels": round(df["black_pixels"].mean(), 3),
+        "std_black_pixels": round(df["black_pixels"].std(ddof=0), 3),
+        "mean_black_fraction": round(df["black_area_fraction"].mean(), 6),
+        "std_black_fraction": round(df["black_area_fraction"].std(ddof=0), 6),
+        "black_pixel_similarity_score": round(black_similarity_score, 3) if not np.isnan(black_similarity_score) else np.nan,
+    }
 
     consistency = {
         "group": group_name,
@@ -371,9 +417,10 @@ def analyze_group(group_name, file_names, threshold_value, brighter_is_particle)
         "mean_avg_particle_equiv_diameter_px": round(df["avg_particle_equiv_diameter_px"].mean(), 3),
         "mean_spacing_match_pct": round(df["spacing_match_pct"].mean(), 3),
         "mean_uniformity_pct": round(df["uniformity_pct"].mean(), 3),
+        "black_pixel_similarity_score": round(black_similarity_score, 3) if not np.isnan(black_similarity_score) else np.nan,
     }
 
-    return results, df, pd.DataFrame([consistency]), common_n
+    return results, df, pd.DataFrame([consistency]), pd.DataFrame([black_pixel_detail]), common_n
 
 
 def stitch_with_partitions(images_rgb, line_color=(255, 0, 0), line_width=6):
@@ -426,7 +473,7 @@ st.caption(
 try:
     analyzed_groups = []
     for group_name, file_names in IMAGE_GROUPS.items():
-        results, metrics_df, consistency_df, common_n = analyze_group(
+        results, metrics_df, consistency_df, black_similarity_df, common_n = analyze_group(
             group_name,
             file_names,
             threshold_value,
@@ -437,6 +484,7 @@ try:
             "results": results,
             "metrics_df": metrics_df,
             "consistency_df": consistency_df,
+            "black_similarity_df": black_similarity_df,
             "common_n": common_n,
         })
 except Exception as e:
@@ -470,6 +518,7 @@ for tab, group in zip(tabs, analyzed_groups):
     with tab:
         st.dataframe(group["metrics_df"], use_container_width=True)
         st.dataframe(group["consistency_df"], use_container_width=True)
+        st.dataframe(group["black_similarity_df"], use_container_width=True)
 
 final_compare = pd.DataFrame([
     {
@@ -480,17 +529,34 @@ final_compare = pd.DataFrame([
         "mean_volume_proxy_px3": group["consistency_df"].iloc[0]["mean_volume_proxy_px3"],
         "volume_cv_across_5": group["consistency_df"].iloc[0]["cv_volume_proxy_px3"],
         "distribution_cv_across_5": group["consistency_df"].iloc[0]["cv_perfect_distribution_pct"],
+        "black_pixel_similarity_score": group["consistency_df"].iloc[0]["black_pixel_similarity_score"],
     }
     for group in analyzed_groups
 ])
 
+black_similarity_compare = pd.concat(
+    [group["black_similarity_df"] for group in analyzed_groups],
+    ignore_index=True
+)
+
 st.subheader("Final comparison to perfect distribution")
 st.dataframe(final_compare, use_container_width=True)
+
+st.subheader("Black-pixel similarity across the 5 images in each group")
+st.dataframe(black_similarity_compare, use_container_width=True)
 
 csv = final_compare.to_csv(index=False).encode("utf-8")
 st.download_button(
     "Download final comparison CSV",
     data=csv,
     file_name="Particle_Slider_App_final_comparison.csv",
+    mime="text/csv"
+)
+
+black_csv = black_similarity_compare.to_csv(index=False).encode("utf-8")
+st.download_button(
+    "Download black-pixel similarity CSV",
+    data=black_csv,
+    file_name="Particle_Slider_App_black_pixel_similarity.csv",
     mime="text/csv"
 )
