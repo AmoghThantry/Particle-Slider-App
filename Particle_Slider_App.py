@@ -651,7 +651,12 @@ for trial_prefix, chart_title in trial_chart_specs:
             "title": chart_title,
             "layer": [
                 {
-                    "mark": {"type": "bar", "cornerRadiusTopLeft": 4, "cornerRadiusTopRight": 4},
+                    "mark": {
+                        "type": "bar",
+                        "cornerRadiusTopLeft": 4,
+                        "cornerRadiusTopRight": 4,
+                        "tooltip": None,
+                    },
                     "encoding": {
                         "x": {
                             "field": "cohort",
@@ -705,8 +710,9 @@ for trial_prefix, chart_title in trial_chart_specs:
                     "mark": {
                         "type": "text",
                         "baseline": "middle",
-                        "fontSize": 12,
-                        "fontWeight": "bold",
+                        "align": "center",
+                        "fontSize": 18,
+                        "fontWeight": 900,
                     },
                     "encoding": {
                         "x": {"field": "cohort", "type": "nominal"},
