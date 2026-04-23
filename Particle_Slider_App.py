@@ -14,12 +14,31 @@ APP_DIR = Path(__file__).resolve().parent
 DOWNLOADS = Path.home() / "Downloads"
 IMAGE_SEARCH_DIRS = [APP_DIR, DOWNLOADS]
 
-GROUP_COUNT = 16
+GROUP_COUNT = 12
 GROUP_SUFFIXES = ["a", "b", "c", "d", "e"]
-IMAGE_GROUPS = {
-    f"Group {group_num}": [f"{group_num}{suffix}.jpg" for suffix in GROUP_SUFFIXES]
-    for group_num in range(1, GROUP_COUNT + 1)
-}
+GROUP_METADATA = [
+    {"group_number": 1, "group_label": "1trial1", "file_prefix": "1"},
+    {"group_number": 2, "group_label": "1trial2", "file_prefix": "2"},
+    {"group_number": 3, "group_label": "1trial3", "file_prefix": "3"},
+    {"group_number": 4, "group_label": "2trial1", "file_prefix": "4"},
+    {"group_number": 5, "group_label": "2trial2", "file_prefix": "5"},
+    {"group_number": 6, "group_label": "2trial3", "file_prefix": "6"},
+    {"group_number": 7, "group_label": "3trial1", "file_prefix": "7"},
+    {"group_number": 8, "group_label": "3trial2", "file_prefix": "8"},
+    {"group_number": 9, "group_label": "3trial3", "file_prefix": "9"},
+    {"group_number": 10, "group_label": "control1", "file_prefix": "10"},
+    {"group_number": 11, "group_label": "control2", "file_prefix": "11"},
+    {"group_number": 12, "group_label": "control3", "file_prefix": "12"},
+]
+IMAGE_GROUPS = [
+    {
+        **group,
+        "display_name": f"Group {group['group_number']} / {group['group_label']}",
+        "file_names": [f"{group['file_prefix']}{suffix}.jpg" for suffix in GROUP_SUFFIXES],
+        "image_labels": [f"{group['group_label']}.{image_num}" for image_num in range(1, len(GROUP_SUFFIXES) + 1)],
+    }
+    for group in GROUP_METADATA
+]
 
 TARGET_PARTICLE_COUNT = 25
 MIN_COMPONENT_AREA = 25
@@ -358,9 +377,12 @@ def compute_image_metrics(image_path: Path, threshold_value: int, brighter_is_pa
     }
 
 
-def analyze_group(group_name, file_names, threshold_value, brighter_is_particle):
+def analyze_group(group_number, group_label, display_name, file_names, image_labels, threshold_value, brighter_is_particle):
     paths = [resolve_image_path(name) for name in file_names]
     results = [compute_image_metrics(p, threshold_value, brighter_is_particle) for p in paths]
+
+    for result, image_label in zip(results, image_labels):
+        result["summary"]["image_name"] = image_label
 
     selected_counts = [r["summary"]["selected_particle_count"] for r in results]
     common_n = min(TARGET_PARTICLE_COUNT, min(selected_counts)) if selected_counts else 0
@@ -380,7 +402,8 @@ def analyze_group(group_name, file_names, threshold_value, brighter_is_particle)
     df = pd.DataFrame([r["summary"] for r in results])
     black_similarity_score = pairwise_similarity_score(df["black_area_fraction"].to_list())
     black_pixel_detail = {
-        "group": group_name,
+        "group_number": group_number,
+        "group": display_name,
         **{
             f"{row['image_name']}_black_pixels": int(row["black_pixels"])
             for _, row in df.iterrows()
@@ -397,7 +420,8 @@ def analyze_group(group_name, file_names, threshold_value, brighter_is_particle)
     }
 
     consistency = {
-        "group": group_name,
+        "group_number": group_number,
+        "group": display_name,
         "common_selected_particle_count": common_n,
         "mean_perfect_distribution_pct": round(df["perfect_distribution_pct"].mean(), 3),
         "std_perfect_distribution_pct": round(df["perfect_distribution_pct"].std(ddof=0), 3),
@@ -472,15 +496,23 @@ st.caption(
 
 try:
     analyzed_groups = []
-    for group_name, file_names in IMAGE_GROUPS.items():
+    for group_info in IMAGE_GROUPS:
         results, metrics_df, consistency_df, black_similarity_df, common_n = analyze_group(
-            group_name,
-            file_names,
+            group_info["group_number"],
+            group_info["group_label"],
+            group_info["display_name"],
+            group_info["file_names"],
+            group_info["image_labels"],
             threshold_value,
             brighter_is_particle
         )
+        metrics_df.index = pd.Index(range(1, len(metrics_df) + 1), name="image_row")
+        consistency_df.index = pd.Index([group_info["group_number"]], name="group_number")
+        black_similarity_df.index = pd.Index([group_info["group_number"]], name="group_number")
         analyzed_groups.append({
-            "group_name": group_name,
+            "group_number": group_info["group_number"],
+            "group_name": group_info["display_name"],
+            "group_label": group_info["group_label"],
             "results": results,
             "metrics_df": metrics_df,
             "consistency_df": consistency_df,
@@ -501,6 +533,9 @@ for group in analyzed_groups:
     group_name = group["group_name"]
     results = group["results"]
     st.subheader(group_name)
+    st.caption(
+        "Image set: " + ", ".join(result["summary"]["image_name"] for result in results)
+    )
 
     originals = stitch_with_partitions([bgr_to_rgb(r["img_bgr"]) for r in results])
     masks = stitch_with_partitions([mask_to_rgb(r["particle_mask"]) for r in results])
@@ -516,12 +551,13 @@ tabs = st.tabs([group["group_name"] for group in analyzed_groups])
 
 for tab, group in zip(tabs, analyzed_groups):
     with tab:
-        st.dataframe(group["metrics_df"], use_container_width=True)
-        st.dataframe(group["consistency_df"], use_container_width=True)
-        st.dataframe(group["black_similarity_df"], use_container_width=True)
+        st.dataframe(group["metrics_df"], use_container_width=True, hide_index=True)
+        st.dataframe(group["consistency_df"], use_container_width=True, hide_index=True)
+        st.dataframe(group["black_similarity_df"], use_container_width=True, hide_index=True)
 
 final_compare = pd.DataFrame([
     {
+        "group_number": group["group_number"],
         "group": group["group_name"],
         "mean_%_perfect_distribution": group["consistency_df"].iloc[0]["mean_perfect_distribution_pct"],
         "perfect_target_%": 100.0,
@@ -538,12 +574,14 @@ black_similarity_compare = pd.concat(
     [group["black_similarity_df"] for group in analyzed_groups],
     ignore_index=True
 )
+final_compare.index = pd.Index(range(1, len(final_compare) + 1), name="group_row")
+black_similarity_compare.index = pd.Index(range(1, len(black_similarity_compare) + 1), name="group_row")
 
 st.subheader("Final comparison to perfect distribution")
-st.dataframe(final_compare, use_container_width=True)
+st.dataframe(final_compare, use_container_width=True, hide_index=True)
 
 st.subheader("Black-pixel similarity across the 5 images in each group")
-st.dataframe(black_similarity_compare, use_container_width=True)
+st.dataframe(black_similarity_compare, use_container_width=True, hide_index=True)
 
 csv = final_compare.to_csv(index=False).encode("utf-8")
 st.download_button(
