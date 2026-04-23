@@ -658,6 +658,7 @@ for trial_prefix, chart_title in trial_chart_specs:
                         "type": "bar",
                         "cornerRadiusTopLeft": 4,
                         "cornerRadiusTopRight": 4,
+                        "size": 70,
                         "tooltip": None,
                     },
                     "encoding": {
