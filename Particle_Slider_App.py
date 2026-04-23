@@ -645,8 +645,8 @@ for trial_prefix, chart_title in trial_chart_specs:
     st.vega_lite_chart(
         chart_df,
         {
-            "width": 520,
-            "height": 520,
+            "width": "container",
+            "height": 360,
             "title": chart_title,
             "layer": [
                 {
@@ -657,7 +657,6 @@ for trial_prefix, chart_title in trial_chart_specs:
                             "type": "nominal",
                             "title": "",
                             "axis": {"labelAngle": 0},
-                            "scale": {"paddingInner": 0.55, "paddingOuter": 0.2},
                         },
                         "xOffset": {"field": "metric"},
                         "y": {
@@ -703,27 +702,19 @@ for trial_prefix, chart_title in trial_chart_specs:
                 {
                     "mark": {
                         "type": "text",
-                        "dy": 16,
+                        "dy": -30,
                         "fontSize": 12,
-                        "fontWeight": "bold",
+                        "color": "#222222",
                     },
                     "encoding": {
                         "x": {"field": "cohort", "type": "nominal"},
                         "xOffset": {"field": "metric"},
                         "y": {"field": "value", "type": "quantitative"},
                         "text": {"field": "value", "type": "quantitative", "format": ".2f"},
-                        "color": {
-                            "field": "metric",
-                            "type": "nominal",
-                            "scale": {
-                                "domain": ["Black Pixel Similarity Score", "Mean Perfect Distribution"],
-                                "range": ["#FFFFFF", "#000000"],
-                            },
-                            "legend": None,
-                        },
                     },
                 },
             ],
         },
         use_container_width=True,
     )
+made a small change
