@@ -640,8 +640,6 @@ trial_chart_specs = [
 
 for trial_prefix, chart_title in trial_chart_specs:
     chart_df = summarize_trial_vs_control(final_compare, trial_prefix)
-    chart_df["value_mid"] = chart_df["value"] / 2.0
-    chart_df["value_label"] = chart_df["value"].map(lambda value: f"{value:.2f}")
     chart_df["metric_label"] = chart_df.apply(
         lambda row: f"{row['metric']} ({row['value']:.2f}%)",
         axis=1
@@ -668,9 +666,12 @@ for trial_prefix, chart_title in trial_chart_specs:
                             "type": "nominal",
                             "title": "",
                             "axis": {"labelAngle": 0},
-                            "scale": {"paddingInner": 0.85, "paddingOuter": 0.3},
+                            "scale": {"paddingInner": 0.45, "paddingOuter": 0.2},
                         },
-                        "xOffset": {"field": "metric"},
+                        "xOffset": {
+                            "field": "metric",
+                            "scale": {"paddingInner": 0.35, "paddingOuter": 0.45},
+                        },
                         "y": {
                             "field": "value",
                             "type": "quantitative",
@@ -706,30 +707,6 @@ for trial_prefix, chart_title in trial_chart_specs:
                             "scale": {
                                 "domain": ["Black Pixel Similarity Score", "Mean Perfect Distribution"],
                                 "range": ["#CC0000", "#006400"],
-                            },
-                            "legend": None,
-                        },
-                    },
-                },
-                {
-                    "mark": {
-                        "type": "text",
-                        "baseline": "middle",
-                        "align": "center",
-                        "fontSize": 18,
-                        "fontWeight": "bold",
-                    },
-                    "encoding": {
-                        "x": {"field": "cohort", "type": "nominal"},
-                        "xOffset": {"field": "metric"},
-                        "y": {"field": "value_mid", "type": "quantitative"},
-                        "text": {"field": "value_label", "type": "nominal"},
-                        "color": {
-                            "field": "metric",
-                            "type": "nominal",
-                            "scale": {
-                                "domain": ["Black Pixel Similarity Score", "Mean Perfect Distribution"],
-                                "range": ["#FFFFFF", "#000000"],
                             },
                             "legend": None,
                         },
