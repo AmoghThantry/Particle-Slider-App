@@ -1,5 +1,7 @@
 # Particle Slider App
-
+---------------------------------------------------------------------------------------------
+Try the program out here! https://particle-slider-app-swdpwmgygkxjes7kdhyrgr.streamlit.app/ 
+---------------------------------------------------------------------------------------------
 An interactive Streamlit app for analyzing particle distributions across image sets. The app thresholds microscopy-style images, detects particle-like components, compares consistency across groups of five images, and summarizes how close each group is to an ideal distribution.
 
 ## What It Does
