@@ -473,6 +473,36 @@ def stitch_with_partitions(images_rgb, line_color=(255, 0, 0), line_width=6):
     return canvas
 
 
+def summarize_trial_vs_control(final_compare_df, trial_prefix):
+    trial_mask = final_compare_df["group_label"].str.startswith(trial_prefix)
+    control_mask = final_compare_df["group_label"].str.startswith("control")
+
+    trial_df = final_compare_df[trial_mask]
+    control_df = final_compare_df[control_mask]
+
+    rows = []
+    for cohort_name, cohort_df in [
+        (f"Mean Score of {trial_prefix.capitalize()}", trial_df),
+        ("Control", control_df),
+    ]:
+        rows.append({
+            "cohort": cohort_name,
+            "metric": "Black Pixel Similarity Score",
+            "value": round(float(cohort_df["black_pixel_similarity_score"].mean()), 3),
+            "bar_color": "#1E90FF",
+            "label_color": "#CC0000",
+        })
+        rows.append({
+            "cohort": cohort_name,
+            "metric": "Mean Perfect Distribution",
+            "value": round(float(cohort_df["mean_%_perfect_distribution"].mean()), 3),
+            "bar_color": "#32CD32",
+            "label_color": "#006400",
+        })
+
+    return pd.DataFrame(rows)
+
+
 # ============================================================
 # STREAMLIT UI
 # ============================================================
@@ -559,6 +589,7 @@ final_compare = pd.DataFrame([
     {
         "group_number": group["group_number"],
         "group": group["group_name"],
+        "group_label": group["group_label"],
         "mean_%_perfect_distribution": group["consistency_df"].iloc[0]["mean_perfect_distribution_pct"],
         "perfect_target_%": 100.0,
         "gap_to_perfect_%": 100.0 - group["consistency_df"].iloc[0]["mean_perfect_distribution_pct"],
@@ -598,3 +629,91 @@ st.download_button(
     file_name="Particle_Slider_App_black_pixel_similarity.csv",
     mime="text/csv"
 )
+
+st.subheader("Trial mean values against control groups")
+
+trial_chart_specs = [
+    ("1trial", "Comparison of Trial 1 mean values against control groups"),
+    ("2trial", "Comparison of Trial 2 mean values against control groups"),
+    ("3trial", "Comparison of Trial 3 mean values against control groups"),
+]
+
+for trial_prefix, chart_title in trial_chart_specs:
+    chart_df = summarize_trial_vs_control(final_compare, trial_prefix)
+
+    st.markdown(f"**{chart_title}**")
+    st.vega_lite_chart(
+        chart_df,
+        {
+            "width": "container",
+            "height": 360,
+            "title": chart_title,
+            "layer": [
+                {
+                    "mark": {"type": "bar", "cornerRadiusTopLeft": 4, "cornerRadiusTopRight": 4},
+                    "encoding": {
+                        "x": {
+                            "field": "cohort",
+                            "type": "nominal",
+                            "title": "",
+                            "axis": {"labelAngle": 0},
+                        },
+                        "xOffset": {"field": "metric"},
+                        "y": {
+                            "field": "value",
+                            "type": "quantitative",
+                            "title": "Mean value",
+                            "scale": {"domain": [0, 100]},
+                        },
+                        "color": {
+                            "field": "metric",
+                            "type": "nominal",
+                            "scale": {
+                                "domain": ["Black Pixel Similarity Score", "Mean Perfect Distribution"],
+                                "range": ["#1E90FF", "#32CD32"],
+                            },
+                            "legend": {"title": "Metric"},
+                        },
+                    },
+                },
+                {
+                    "mark": {
+                        "type": "text",
+                        "dy": -12,
+                        "fontSize": 12,
+                        "fontWeight": "bold",
+                    },
+                    "encoding": {
+                        "x": {"field": "cohort", "type": "nominal"},
+                        "xOffset": {"field": "metric"},
+                        "y": {"field": "value", "type": "quantitative"},
+                        "text": {"field": "metric", "type": "nominal"},
+                        "color": {
+                            "field": "metric",
+                            "type": "nominal",
+                            "scale": {
+                                "domain": ["Black Pixel Similarity Score", "Mean Perfect Distribution"],
+                                "range": ["#CC0000", "#006400"],
+                            },
+                            "legend": None,
+                        },
+                    },
+                },
+                {
+                    "mark": {
+                        "type": "text",
+                        "dy": -30,
+                        "fontSize": 12,
+                        "color": "#222222",
+                    },
+                    "encoding": {
+                        "x": {"field": "cohort", "type": "nominal"},
+                        "xOffset": {"field": "metric"},
+                        "y": {"field": "value", "type": "quantitative"},
+                        "text": {"field": "value", "type": "quantitative", "format": ".2f"},
+                    },
+                },
+            ],
+        },
+        use_container_width=True,
+    )
