@@ -640,13 +640,14 @@ trial_chart_specs = [
 
 for trial_prefix, chart_title in trial_chart_specs:
     chart_df = summarize_trial_vs_control(final_compare, trial_prefix)
+    chart_df["value_mid"] = chart_df["value"] / 2.0
 
     st.markdown(f"**{chart_title}**")
     st.vega_lite_chart(
         chart_df,
         {
-            "width": "container",
-            "height": 360,
+            "width": 520,
+            "height": 520,
             "title": chart_title,
             "layer": [
                 {
@@ -657,6 +658,7 @@ for trial_prefix, chart_title in trial_chart_specs:
                             "type": "nominal",
                             "title": "",
                             "axis": {"labelAngle": 0},
+                            "scale": {"paddingInner": 0.55, "paddingOuter": 0.2},
                         },
                         "xOffset": {"field": "metric"},
                         "y": {
@@ -702,15 +704,24 @@ for trial_prefix, chart_title in trial_chart_specs:
                 {
                     "mark": {
                         "type": "text",
-                        "dy": -30,
+                        "baseline": "middle",
                         "fontSize": 12,
-                        "color": "#222222",
+                        "fontWeight": "bold",
                     },
                     "encoding": {
                         "x": {"field": "cohort", "type": "nominal"},
                         "xOffset": {"field": "metric"},
-                        "y": {"field": "value", "type": "quantitative"},
+                        "y": {"field": "value_mid", "type": "quantitative"},
                         "text": {"field": "value", "type": "quantitative", "format": ".2f"},
+                        "color": {
+                            "field": "metric",
+                            "type": "nominal",
+                            "scale": {
+                                "domain": ["Black Pixel Similarity Score", "Mean Perfect Distribution"],
+                                "range": ["#FFFFFF", "#000000"],
+                            },
+                            "legend": None,
+                        },
                     },
                 },
             ],
