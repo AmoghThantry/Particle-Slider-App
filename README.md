@@ -70,14 +70,14 @@ For each 5-image group, it then:
 
 - Python 3.10+
 - `streamlit`
-- `opencv-python`
+- `opencv-python-headless`
 - `numpy`
 - `pandas`
 
 Install dependencies with:
 
 ```bash
-pip install streamlit opencv-python numpy pandas
+pip install streamlit opencv-python-headless numpy pandas
 ```
 
 ## Running The App
