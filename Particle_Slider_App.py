@@ -10,11 +10,16 @@ import streamlit as st
 # ============================================================
 # FILE SETUP
 # ============================================================
+APP_DIR = Path(__file__).resolve().parent
 DOWNLOADS = Path.home() / "Downloads"
+IMAGE_SEARCH_DIRS = [APP_DIR, DOWNLOADS]
 
-CONTROL_FILES = [f"Control_{i}.jpg" for i in range(1, 6)]
-SAMPLE1_FILES = [f"Sample_{i}.jpg" for i in range(11, 16)]
-SAMPLE2_FILES = [f"Sample_{i}.jpg" for i in range(21, 26)]
+GROUP_COUNT = 16
+GROUP_SUFFIXES = ["a", "b", "c", "d", "e"]
+IMAGE_GROUPS = {
+    f"Group {group_num}": [f"{group_num}{suffix}.jpg" for suffix in GROUP_SUFFIXES]
+    for group_num in range(1, GROUP_COUNT + 1)
+}
 
 TARGET_PARTICLE_COUNT = 25
 MIN_COMPONENT_AREA = 25
@@ -23,32 +28,36 @@ MIN_CIRCULARITY = 0.45
 MORPH_KERNEL = 3
 GRID_ROWS = 6
 GRID_COLS = 6
+TOP_CROP_DIVISOR = 6.5
 
 
 # ============================================================
 # HELPERS
 # ============================================================
 def resolve_image_path(name: str) -> Path:
-    p = DOWNLOADS / name
     candidates = []
 
-    if p.suffix:
-        candidates.append(p)
-    else:
-        candidates.extend([
-            DOWNLOADS / f"{name}.jpg",
-            DOWNLOADS / f"{name}.JPG",
-            DOWNLOADS / f"{name}.jpeg",
-            DOWNLOADS / f"{name}.JPEG",
-            DOWNLOADS / f"{name}.png",
-            DOWNLOADS / f"{name}.PNG",
-        ])
+    for base_dir in IMAGE_SEARCH_DIRS:
+        p = base_dir / name
+
+        if p.suffix:
+            candidates.append(p)
+        else:
+            candidates.extend([
+                base_dir / f"{name}.jpg",
+                base_dir / f"{name}.JPG",
+                base_dir / f"{name}.jpeg",
+                base_dir / f"{name}.JPEG",
+                base_dir / f"{name}.png",
+                base_dir / f"{name}.PNG",
+            ])
 
     for c in candidates:
         if c.exists():
             return c
 
-    raise FileNotFoundError(f"Could not find image for {name} in {DOWNLOADS}")
+    search_dirs = ", ".join(str(path) for path in IMAGE_SEARCH_DIRS)
+    raise FileNotFoundError(f"Could not find image for {name} in: {search_dirs}")
 
 
 @st.cache_data(show_spinner=False)
@@ -65,6 +74,19 @@ def bgr_to_rgb(img):
 
 def mask_to_rgb(mask):
     return cv2.cvtColor(mask, cv2.COLOR_GRAY2RGB)
+
+
+def crop_top_strip(img_bgr, divisor=TOP_CROP_DIVISOR):
+    h = img_bgr.shape[0]
+    crop_px = int(round(h / divisor))
+
+    if crop_px <= 0:
+        return img_bgr.copy(), 0
+
+    if crop_px >= h:
+        crop_px = h - 1
+
+    return img_bgr[crop_px:, :].copy(), crop_px
 
 
 def make_particle_mask(img_bgr, threshold_value=245, brighter_is_particle=True):
@@ -201,7 +223,8 @@ def grid_distribution_stats(mask, rows=6, cols=6):
 
 
 def compute_image_metrics(image_path: Path, threshold_value: int, brighter_is_particle: bool):
-    img = load_image(str(image_path))
+    original_img = load_image(str(image_path))
+    img, cropped_top_px = crop_top_strip(original_img)
     h, w = img.shape[:2]
     total_px = h * w
 
@@ -274,6 +297,7 @@ def compute_image_metrics(image_path: Path, threshold_value: int, brighter_is_pa
 
     summary = {
         "image_name": image_path.name,
+        "cropped_top_px": cropped_top_px,
         "particle_pixels": particle_pixels,
         "white_pixels": white_pixels,
         "particle_area_fraction": round(particle_fraction, 6),
@@ -394,26 +418,40 @@ brighter_is_particle = st.radio(
     index=0
 )
 
-st.caption("True particle height is not available from plain 2D images, so this app uses a consistent size / volume proxy.")
+st.caption(
+    f"Each image is analyzed after removing the top 1/{TOP_CROP_DIVISOR} of the frame. "
+    "True particle height is not available from plain 2D images, so this app uses a consistent size / volume proxy."
+)
 
 try:
-    control_results, control_df, control_cons, control_n = analyze_group("Control", CONTROL_FILES, threshold_value, brighter_is_particle)
-    sample1_results, sample1_df, sample1_cons, sample1_n = analyze_group("Sample 1", SAMPLE1_FILES, threshold_value, brighter_is_particle)
-    sample2_results, sample2_df, sample2_cons, sample2_n = analyze_group("Sample 2", SAMPLE2_FILES, threshold_value, brighter_is_particle)
+    analyzed_groups = []
+    for group_name, file_names in IMAGE_GROUPS.items():
+        results, metrics_df, consistency_df, common_n = analyze_group(
+            group_name,
+            file_names,
+            threshold_value,
+            brighter_is_particle
+        )
+        analyzed_groups.append({
+            "group_name": group_name,
+            "results": results,
+            "metrics_df": metrics_df,
+            "consistency_df": consistency_df,
+            "common_n": common_n,
+        })
 except Exception as e:
     st.error(str(e))
     st.stop()
 
-st.info(
-    f"Common isolated particle counts used per group: "
-    f"Control = {control_n}, Sample 1 = {sample1_n}, Sample 2 = {sample2_n}"
+common_counts_text = ", ".join(
+    f'{group["group_name"]} = {group["common_n"]}'
+    for group in analyzed_groups
 )
+st.info(f"Common isolated particle counts used per group: {common_counts_text}")
 
-for group_name, results in [
-    ("Control", control_results),
-    ("Sample 1", sample1_results),
-    ("Sample 2", sample2_results),
-]:
+for group in analyzed_groups:
+    group_name = group["group_name"]
+    results = group["results"]
     st.subheader(group_name)
 
     originals = stitch_with_partitions([bgr_to_rgb(r["img_bgr"]) for r in results])
@@ -421,54 +459,30 @@ for group_name, results in [
 
     c1, c2 = st.columns(2)
     with c1:
-        st.image(originals, caption=f"{group_name} originals stitched", use_container_width=True)
+        st.image(originals, caption=f"{group_name} cropped originals stitched", use_container_width=True)
     with c2:
-        st.image(masks, caption=f"{group_name} toleranced masks stitched", use_container_width=True)
+        st.image(masks, caption=f"{group_name} cropped toleranced masks stitched", use_container_width=True)
 
 st.subheader("Per-image metrics")
-tabs = st.tabs(["Control", "Sample 1", "Sample 2"])
+tabs = st.tabs([group["group_name"] for group in analyzed_groups])
 
-with tabs[0]:
-    st.dataframe(control_df, use_container_width=True)
-    st.dataframe(control_cons, use_container_width=True)
+for tab, group in zip(tabs, analyzed_groups):
+    with tab:
+        st.dataframe(group["metrics_df"], use_container_width=True)
+        st.dataframe(group["consistency_df"], use_container_width=True)
 
-with tabs[1]:
-    st.dataframe(sample1_df, use_container_width=True)
-    st.dataframe(sample1_cons, use_container_width=True)
-
-with tabs[2]:
-    st.dataframe(sample2_df, use_container_width=True)
-    st.dataframe(sample2_cons, use_container_width=True)
-
-final_compare = pd.DataFrame({
-    "group": ["Control", "Sample 1", "Sample 2"],
-    "mean_%_perfect_distribution": [
-        control_cons.iloc[0]["mean_perfect_distribution_pct"],
-        sample1_cons.iloc[0]["mean_perfect_distribution_pct"],
-        sample2_cons.iloc[0]["mean_perfect_distribution_pct"],
-    ],
-    "perfect_target_%": [100.0, 100.0, 100.0],
-    "gap_to_perfect_%": [
-        100.0 - control_cons.iloc[0]["mean_perfect_distribution_pct"],
-        100.0 - sample1_cons.iloc[0]["mean_perfect_distribution_pct"],
-        100.0 - sample2_cons.iloc[0]["mean_perfect_distribution_pct"],
-    ],
-    "mean_volume_proxy_px3": [
-        control_cons.iloc[0]["mean_volume_proxy_px3"],
-        sample1_cons.iloc[0]["mean_volume_proxy_px3"],
-        sample2_cons.iloc[0]["mean_volume_proxy_px3"],
-    ],
-    "volume_cv_across_5": [
-        control_cons.iloc[0]["cv_volume_proxy_px3"],
-        sample1_cons.iloc[0]["cv_volume_proxy_px3"],
-        sample2_cons.iloc[0]["cv_volume_proxy_px3"],
-    ],
-    "distribution_cv_across_5": [
-        control_cons.iloc[0]["cv_perfect_distribution_pct"],
-        sample1_cons.iloc[0]["cv_perfect_distribution_pct"],
-        sample2_cons.iloc[0]["cv_perfect_distribution_pct"],
-    ],
-})
+final_compare = pd.DataFrame([
+    {
+        "group": group["group_name"],
+        "mean_%_perfect_distribution": group["consistency_df"].iloc[0]["mean_perfect_distribution_pct"],
+        "perfect_target_%": 100.0,
+        "gap_to_perfect_%": 100.0 - group["consistency_df"].iloc[0]["mean_perfect_distribution_pct"],
+        "mean_volume_proxy_px3": group["consistency_df"].iloc[0]["mean_volume_proxy_px3"],
+        "volume_cv_across_5": group["consistency_df"].iloc[0]["cv_volume_proxy_px3"],
+        "distribution_cv_across_5": group["consistency_df"].iloc[0]["cv_perfect_distribution_pct"],
+    }
+    for group in analyzed_groups
+])
 
 st.subheader("Final comparison to perfect distribution")
 st.dataframe(final_compare, use_container_width=True)
