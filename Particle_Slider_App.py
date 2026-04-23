@@ -641,6 +641,7 @@ trial_chart_specs = [
 for trial_prefix, chart_title in trial_chart_specs:
     chart_df = summarize_trial_vs_control(final_compare, trial_prefix)
     chart_df["value_mid"] = chart_df["value"] / 2.0
+    chart_df["value_label"] = chart_df["value"].map(lambda value: f"{value:.2f}")
 
     st.markdown(f"**{chart_title}**")
     st.vega_lite_chart(
@@ -712,13 +713,13 @@ for trial_prefix, chart_title in trial_chart_specs:
                         "baseline": "middle",
                         "align": "center",
                         "fontSize": 18,
-                        "fontWeight": 900,
+                        "fontWeight": "bold",
                     },
                     "encoding": {
                         "x": {"field": "cohort", "type": "nominal"},
                         "xOffset": {"field": "metric"},
                         "y": {"field": "value_mid", "type": "quantitative"},
-                        "text": {"field": "value", "type": "quantitative", "format": ".2f"},
+                        "text": {"field": "value_label", "type": "nominal"},
                         "color": {
                             "field": "metric",
                             "type": "nominal",
