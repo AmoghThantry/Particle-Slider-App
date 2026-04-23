@@ -668,7 +668,7 @@ for trial_prefix, chart_title in trial_chart_specs:
                             "type": "nominal",
                             "title": "",
                             "axis": {"labelAngle": 0},
-                            "scale": {"paddingInner": 0.55, "paddingOuter": 0.2},
+                            "scale": {"paddingInner": 0.85, "paddingOuter": 0.3},
                         },
                         "xOffset": {"field": "metric"},
                         "y": {
