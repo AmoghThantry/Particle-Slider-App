@@ -666,11 +666,11 @@ for trial_prefix, chart_title in trial_chart_specs:
                             "type": "nominal",
                             "title": "",
                             "axis": {"labelAngle": 0},
-                            "scale": {"paddingInner": 0.45, "paddingOuter": 0.2},
+                            "scale": {"paddingInner": 0.28, "paddingOuter": 0.18},
                         },
                         "xOffset": {
                             "field": "metric",
-                            "scale": {"paddingInner": 0.35, "paddingOuter": 0.45},
+                            "scale": {"paddingInner": 0.9, "paddingOuter": 0.35},
                         },
                         "y": {
                             "field": "value",
