@@ -503,6 +503,34 @@ def summarize_trial_vs_control(final_compare_df, trial_prefix):
     return pd.DataFrame(rows)
 
 
+def summarize_all_trials_vs_control(final_compare_df):
+    control_df = final_compare_df[final_compare_df["group_label"].str.startswith("control")]
+
+    cohort_specs = [
+        ("Control", control_df, 1),
+        ("Mean Score of 1trial", final_compare_df[final_compare_df["group_label"].str.startswith("1trial")], 2),
+        ("Mean Score of 2trial", final_compare_df[final_compare_df["group_label"].str.startswith("2trial")], 3),
+        ("Mean Score of 3trial", final_compare_df[final_compare_df["group_label"].str.startswith("3trial")], 4),
+    ]
+
+    rows = []
+    for cohort_name, cohort_df, cohort_order in cohort_specs:
+        rows.append({
+            "cohort": cohort_name,
+            "cohort_order": cohort_order,
+            "metric": "Black Pixel Similarity Score",
+            "value": round(float(cohort_df["black_pixel_similarity_score"].mean()), 3),
+        })
+        rows.append({
+            "cohort": cohort_name,
+            "cohort_order": cohort_order,
+            "metric": "Mean Perfect Distribution",
+            "value": round(float(cohort_df["mean_%_perfect_distribution"].mean()), 3),
+        })
+
+    return pd.DataFrame(rows)
+
+
 # ============================================================
 # STREAMLIT UI
 # ============================================================
@@ -717,3 +745,92 @@ for trial_prefix, chart_title in trial_chart_specs:
         },
         use_container_width=True,
     )
+
+combined_chart_df = summarize_all_trials_vs_control(final_compare)
+combined_chart_df["metric_label"] = combined_chart_df.apply(
+    lambda row: (
+        f"Black Pixel Similarity\n({row['value']:.2f}%)"
+        if row["metric"] == "Black Pixel Similarity Score"
+        else f"Mean Perfect Distribution\n({row['value']:.2f}%)"
+    ),
+    axis=1
+)
+
+st.markdown("**Combined trial and control mean values**")
+st.vega_lite_chart(
+    combined_chart_df,
+    {
+        "width": 1100,
+        "height": 560,
+        "title": "Combined comparison of Control, Trial 1, Trial 2, and Trial 3 mean values",
+        "layer": [
+            {
+                "mark": {
+                    "type": "bar",
+                    "cornerRadiusTopLeft": 4,
+                    "cornerRadiusTopRight": 4,
+                    "size": 85,
+                    "tooltip": None,
+                },
+                "encoding": {
+                    "x": {
+                        "field": "cohort",
+                        "type": "nominal",
+                        "title": "",
+                        "sort": ["Control", "Mean Score of 1trial", "Mean Score of 2trial", "Mean Score of 3trial"],
+                        "axis": {"labelAngle": 0},
+                        "scale": {"paddingInner": 0.2, "paddingOuter": 0.12},
+                    },
+                    "xOffset": {
+                        "field": "metric",
+                        "scale": {"paddingInner": 0.65, "paddingOuter": 0.25},
+                    },
+                    "y": {
+                        "field": "value",
+                        "type": "quantitative",
+                        "title": "Mean value",
+                        "scale": {"domain": [0, 100]},
+                    },
+                    "color": {
+                        "field": "metric",
+                        "type": "nominal",
+                        "scale": {
+                            "domain": ["Black Pixel Similarity Score", "Mean Perfect Distribution"],
+                            "range": ["#1E90FF", "#32CD32"],
+                        },
+                        "legend": {"title": "Metric"},
+                    },
+                },
+            },
+            {
+                "mark": {
+                    "type": "text",
+                    "dy": -16,
+                    "fontSize": 11,
+                    "fontWeight": "bold",
+                    "lineBreak": "\n",
+                },
+                "encoding": {
+                    "x": {
+                        "field": "cohort",
+                        "type": "nominal",
+                        "sort": ["Control", "Mean Score of 1trial", "Mean Score of 2trial", "Mean Score of 3trial"],
+                    },
+                    "xOffset": {"field": "metric"},
+                    "y": {"field": "value", "type": "quantitative"},
+                    "text": {"field": "metric_label", "type": "nominal"},
+                    "color": {
+                        "field": "metric",
+                        "type": "nominal",
+                        "scale": {
+                            "domain": ["Black Pixel Similarity Score", "Mean Perfect Distribution"],
+                            "range": ["#CC0000", "#006400"],
+                        },
+                        "legend": None,
+                    },
+                },
+            },
+        ],
+    },
+    use_container_width=True,
+)
