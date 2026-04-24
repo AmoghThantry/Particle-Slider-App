@@ -721,9 +721,9 @@ for trial_prefix, chart_title in trial_chart_specs:
                 {
                     "mark": {
                         "type": "text",
-                        "dy": -12,
-                        "fontSize": 12,
-                        "fontWeight": "bold",
+                        "dy": -20,
+                        "fontSize": 15,
+                        "fontWeight": 900,
                     },
                     "encoding": {
                         "x": {"field": "cohort", "type": "nominal"},
@@ -735,7 +735,7 @@ for trial_prefix, chart_title in trial_chart_specs:
                             "type": "nominal",
                             "scale": {
                                 "domain": ["Black Pixel Similarity Score", "Mean Perfect Distribution"],
-                                "range": ["#CC0000", "#006400"],
+                                "range": ["#8B0000", "#004B23"],
                             },
                             "legend": None,
                         },
@@ -805,9 +805,9 @@ st.vega_lite_chart(
             {
                 "mark": {
                     "type": "text",
-                    "dy": -16,
-                    "fontSize": 11,
-                    "fontWeight": "bold",
+                    "dy": -24,
+                    "fontSize": 14,
+                    "fontWeight": 900,
                     "lineBreak": "\n",
                 },
                 "encoding": {
@@ -824,7 +824,7 @@ st.vega_lite_chart(
                         "type": "nominal",
                         "scale": {
                             "domain": ["Black Pixel Similarity Score", "Mean Perfect Distribution"],
-                            "range": ["#CC0000", "#006400"],
+                            "range": ["#8B0000", "#004B23"],
                         },
                         "legend": None,
                     },
